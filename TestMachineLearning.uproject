@@ -1,0 +1,38 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.6",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "TestMachineLearning",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"UMG"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ChaosVehiclesPlugin",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "RawInput",
+			"Enabled": true
+		},
+		{
+			"Name": "LearningAgents",
+			"Enabled": true
+		}
+	]
+}
