@@ -29,7 +29,9 @@ public class TestMachineLearning : ModuleRules
 			"TestMachineLearning/Variant_TimeTrial/UI"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { 
+			"DroneRL"
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

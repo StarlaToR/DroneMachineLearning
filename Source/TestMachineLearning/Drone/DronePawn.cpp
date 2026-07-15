@@ -65,6 +65,21 @@ void ADronePawn::BeginPlay()
 	Super::BeginPlay();
 
 	HitGround = false;
+
+	if (UsePerception)
+	{
+		InitializePerceptionRayDirections();
+
+		FTimerHandle handle = FTimerHandle();
+		GetWorld()->GetTimerManager().SetTimer(
+			handle,
+			this,
+			&ADronePawn::UpdatePerceptionData,
+			RayTickInterval,  
+			true    
+		);
+
+	}
 }
 
 void ADronePawn::Tick(float Delta)
@@ -73,8 +88,8 @@ void ADronePawn::Tick(float Delta)
 
 	BoxCollider->AddForce(AccelerationDir.RotateVector(FVector::UpVector * AccelerationPower), NAME_None, true);
 	AccelerationPower = 0;
-	DrawDebugLine(GetWorld(), GetActorLocation(),
-		GetActorLocation() + AccelerationDir.RotateVector(FVector::UpVector * 100.f), FColor::Red);
+	//DrawDebugLine(GetWorld(), GetActorLocation(),
+	//	GetActorLocation() + AccelerationDir.RotateVector(FVector::UpVector * 100.f), FColor::Red);
 	SetActorRotation(AccelerationDir);
 	
 	// realign the camera yaw to face front
@@ -119,41 +134,168 @@ void ADronePawn::DoThrottle(float ThrottleValue)
 {
 	AccelerationPower = FMath::GetMappedRangeValueClamped(
 		FVector2f(-1.f, 1.f), FVector2f(0.f, DroneMaxPower), ThrottleValue);
-
-	
 }
 
 void ADronePawn::DoYaw(float YawValue)
 {
 	AccelerationDir = AccelerationDir * FQuat(GetActorUpVector(), YawValue * PI / 180.f);
-
 }
 
 void ADronePawn::DoPitch(float PitchValue)
 {
 	AccelerationDir = AccelerationDir * FQuat(GetActorRightVector(), PitchValue * PI / 180.f);
-
 }
 
 void ADronePawn::DoRoll(float RollValue)
 {
 	AccelerationDir = AccelerationDir * FQuat(GetActorForwardVector(), RollValue * PI / 180.f);
-	
 }
 
 void ADronePawn::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,
 	FVector NormalImpulse, const FHitResult& Hit)
 {
-	hitNumber++;
-
-	if (hitNumber > 1)
-		HitGround = true;
-
-	GEngine->AddOnScreenDebugMessage(5, 5, FColor::Red, "Hit");
+	HitGround = true;
 }
 
 void ADronePawn::ResetForNewIteration()
 {
 	AccelerationDir = FQuat::Identity;
 	AccelerationPower = 0;
+}
+
+TArray<float> ADronePawn::GetPerceptionData_CPP()
+{
+	return PerceptionData;
+}
+
+void ADronePawn::InitializePerceptionRayDirections()
+{
+	FVector coneDirection = (FVector::ForwardVector + FVector::UpVector).GetSafeNormal();
+	FVector rayDirection = coneDirection;
+
+	PerceptionRayDirections.Add(rayDirection);
+	float circleAngle = ConeAngle * 0.5f / CircleCount;
+
+	for (int i = 0; i < CircleCount; i++)
+	{
+		rayDirection = rayDirection.RotateAngleAxis(circleAngle, FVector::LeftVector);
+
+		int dotCount = i * RayPerCircleAdded + FirstCircleRayNb;
+		float dotAngle = 360 / dotCount;
+
+		rayDirection = rayDirection.RotateAngleAxis(dotAngle * 0.5f * i, coneDirection);
+
+		for(int j = 0; j < dotCount; j++)
+		{
+			PerceptionRayDirections.Add(rayDirection);
+			rayDirection = rayDirection.RotateAngleAxis(dotAngle, coneDirection);
+		}
+	}
+
+	PerceptionData.SetNum(PerceptionRayDirections.Num() + 4);
+}
+
+float ADronePawn::ShootPerceptionRaycast(FVector RayDirection)
+{
+	FHitResult hit;
+	FCollisionQueryParams Params;
+	Params.bTraceComplex = true;
+	Params.AddIgnoredActor(this);
+	Params.AddIgnoredActors(ActorsToIgnore); 
+
+	if (GetWorld()->LineTraceSingleByChannel(hit, GetActorLocation(), GetActorLocation() + RayDirection * RaySize, RayTraceChannel, Params))
+	{
+		//if (hit.Component.IsValid())
+		//{
+		//	bool isGate = hit.Component->GetCollisionObjectType() == GateTriggerChannel;
+		//	if (ShowDebugLines)
+		//		DrawDebugLine(
+		//			GetWorld(),
+		//			GetActorLocation(),
+		//			GetActorLocation() + RayDirection * hit.Distance,
+		//			isGate ? FColor::Green : FColor::Red,
+		//			false,
+		//			RayTickInterval,
+		//			0,
+		//			2.0f
+		//		);
+
+		//	return(FPreceptionData(hit.Distance, isGate));
+		//}
+		
+		if (ShowDebugLines)
+			DrawDebugLine(
+				GetWorld(),
+				GetActorLocation(),
+				GetActorLocation() + RayDirection * hit.Distance,
+				FColor::Red,
+				false,
+				RayTickInterval,
+				0,
+				2.0f
+			);
+
+		return(hit.Distance);
+	}
+
+	//if (ShowDebugLines)
+	//	DrawDebugLine(
+	//		GetWorld(),
+	//		GetActorLocation(),
+	//		GetActorLocation() + RayDirection * RaySize,
+	//		FColor::Red,
+	//		false,
+	//		RayTickInterval,
+	//		0,
+	//		2.0f
+	//	);
+
+	//return FPreceptionData(RaySize, false);
+
+	if (ShowDebugLines)
+		DrawDebugLine(
+			GetWorld(),
+			GetActorLocation(),
+			GetActorLocation() + RayDirection * RaySize,
+			FColor::Red,
+			false,
+			RayTickInterval,
+			0,
+			2.0f
+		);
+
+	return(RaySize);
+}
+
+void ADronePawn::UpdatePerceptionData()
+{
+	if (currentTick == 0)
+	{
+		int num = PerceptionData.Num();
+		PerceptionData[0] = ShootPerceptionRaycast(GetActorTransform().TransformVector(PerceptionRayDirections[0]));
+		PerceptionData[num - 4] = ShootPerceptionRaycast(GetActorRightVector() * -1);
+		PerceptionData[num - 3] = ShootPerceptionRaycast(GetActorRightVector());
+		PerceptionData[num - 2] = ShootPerceptionRaycast(FVector::DownVector);
+		PerceptionData[num - 1] = ShootPerceptionRaycast(FVector::UpVector);
+	}
+	else if (currentTick == 1)
+	{
+		FTransform transform = GetActorTransform();
+		for (int i = 1; i < 7; i++)
+		{
+			PerceptionData[i] = ShootPerceptionRaycast(transform.TransformVector(PerceptionRayDirections[i]));
+		}
+	}
+	else
+	{ 
+		FTransform transform = GetActorTransform();
+		for (int i = 7; i < 13; i++)
+		{
+			PerceptionData[i] = ShootPerceptionRaycast(transform.TransformVector(PerceptionRayDirections[i]));
+		}
+	}
+
+	currentTick++;
+	if (currentTick > 2)
+		currentTick = 0;
 }

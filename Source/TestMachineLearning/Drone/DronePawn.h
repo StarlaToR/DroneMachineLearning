@@ -12,6 +12,22 @@ struct FInputActionValue;
 class UCameraComponent;
 class USpringArmComponent;
 
+USTRUCT(BlueprintType)
+struct FPreceptionData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float Distance;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	bool IsGate;
+
+	FPreceptionData(float InDistance = 5000.f, bool InIsGate = false)
+		: Distance(InDistance), IsGate(InIsGate)
+	{}
+};
+
 UCLASS()
 class TESTMACHINELEARNING_API ADronePawn : public APawn
 {
@@ -28,21 +44,21 @@ class TESTMACHINELEARNING_API ADronePawn : public APawn
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category ="Components", meta = (AllowPrivateAccess = "true"))
 	UBoxComponent* BoxCollider;
 
-protected:
+public:
 	/** Throttle Action */
-	UPROPERTY(EditAnywhere, Category="Input")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* ThrottleAction;
 
 	/** Brake Action */
-	UPROPERTY(EditAnywhere, Category="Input")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* YawAction;
 
 	/** Handbrake Action */
-	UPROPERTY(EditAnywhere, Category="Input")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* PitchAction;
 
 	/** Look Around Action */
-	UPROPERTY(EditAnywhere, Category="Input")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
 	UInputAction* RollAction;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Parameters")
@@ -54,9 +70,43 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parameters", meta = (AllowPrivateAccess = "true"))
 	float DroneMaxPower = 1000.f;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Parameters")
-	bool HitGround = false;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	bool UsePerception = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	bool ShowDebugLines = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	float ConeAngle = 45.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	int CircleCount = 2;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	int FirstCircleRayNb = 6;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	int RayPerCircleAdded = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	float RaySize = 5000;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	float RayTickInterval = 0.05f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	TEnumAsByte<ECollisionChannel> RayTraceChannel;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Parameters|Perception")
+	TEnumAsByte<ECollisionChannel> GateTriggerChannel;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Parameters|Perception")
+	TArray<TObjectPtr<AActor>> ActorsToIgnore;
+
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Parameters")
+	bool HitGround = false;
+
 	ADronePawn();
 	
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
@@ -100,10 +150,23 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Learning")
 	void ResetForNewIteration();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Learning")
+	TArray<float> GetPerceptionData_CPP();
+
 public:
 	/** Returns the front spring arm subobject */
 	FORCEINLINE USpringArmComponent* GetSpringArm() const { return SpringArm; }
 	/** Returns the front camera subobject */
 	FORCEINLINE UCameraComponent* GetCamera() const { return Camera; }
 
+private:
+	TArray<FVector> PerceptionRayDirections;
+	TArray<float> PerceptionData;
+	int8 currentTick = 0;
+
+private:
+	void InitializePerceptionRayDirections();
+	float ShootPerceptionRaycast(FVector RayDirection);
+	void UpdatePerceptionData();
 };

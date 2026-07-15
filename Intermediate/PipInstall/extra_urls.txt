@@ -1,1 +1,1 @@
-https://download.pytorch.org/whl/
+https://download.pytorch.org/whl/cu124/
